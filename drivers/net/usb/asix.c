@@ -1611,6 +1611,14 @@ static const struct usb_device_id	products [] = {
 	USB_DEVICE (0x04bb, 0x0930),
 	.driver_info = (unsigned long) &ax88178_info,
 }, {
+	// DLink DUB-E100 H/W Ver C1
+	USB_DEVICE (0x2001, 0x1a02),
+	.driver_info = (unsigned long) &ax88772_info,
+}, {
+	/* ASIX AX88772A 10/100 */
+	USB_DEVICE(0x0421, 0x772A),
+	.driver_info = (unsigned long) &ax88772a_info,
+}, {
 	// Belkin F5D5055
 	USB_DEVICE(0x050d, 0x5055),
 	.driver_info = (unsigned long) &ax88178_info,
