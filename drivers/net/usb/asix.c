@@ -1403,49 +1403,284 @@ static const struct net_device_ops ax88178_netdev_ops = {
 static int ax88178_bind(struct usbnet *dev, struct usb_interface *intf)
 {
 	int ret;
-	u8 buf[ETH_ALEN];
-	struct asix_data *data = (struct asix_data *)&dev->data;
+	void *buf;
+	struct ax8817x_data *data = (struct ax8817x_data *)&dev->data;
+	struct ax88178_data *ax178dataptr = NULL;
 
-	data->eeprom_len = AX88772_EEPROM_LEN;
+        printk(KERN_DEBUG "function %s line %d ",__FUNCTION__,__LINE__);
+	axusbnet_get_endpoints(dev, intf);
 
-	usbnet_get_endpoints(dev,intf);
+	buf = kmalloc(6, GFP_KERNEL);
+	if (!buf) {
+		deverr(dev, "Cannot allocate memory for buffer");
+		return -ENOMEM;
+	}
+
+	/* allocate 178 data */
+	ax178dataptr = kmalloc(sizeof(*ax178dataptr), GFP_KERNEL);
+	if (!ax178dataptr) {
+		deverr(dev, "Cannot allocate memory for AX88178 data");
+		ret = -ENOMEM;
+		goto error_out;
+	}
+	memset(ax178dataptr, 0, sizeof(struct ax88178_data));
+	dev->priv = ax178dataptr;
+	/* end of allocate 178 data */
+
+	/* Get the EEPROM data*/
+	ret = ax8817x_read_cmd(dev, AX_CMD_READ_EEPROM, 0x0017, 0, 2,
+			       (void *)(&ax178dataptr->EepromData));
+	if (ret < 0) {
+		deverr(dev, "read SROM address 17h failed: %d", ret);
+		goto error_out;
+	}
+	le16_to_cpus(&ax178dataptr->EepromData);
+	/* End of get EEPROM data */
+
+	if (ax178dataptr->EepromData == 0xffff) {
+		ax178dataptr->PhyMode  = PHY_MODE_MARVELL;
+		ax178dataptr->LedMode  = 0;
+		ax178dataptr->UseGpio0 = 1; /* True */
+	} else {
+		ax178dataptr->PhyMode = (u8)(ax178dataptr->EepromData &
+					     EEPROMMASK);
+		ax178dataptr->LedMode = (u8)(ax178dataptr->EepromData >> 8);
+
+		/* for buffalo new (use gpio2) */
+		if (ax178dataptr->LedMode == 6)
+			ax178dataptr->LedMode = 1;
+		else if (ax178dataptr->LedMode == 1)
+			ax178dataptr->BuffaloOld = 1;
+
+
+		if (ax178dataptr->EepromData & 0x80)
+			ax178dataptr->UseGpio0 = 0; /* MARVEL se and other */
+		else
+			ax178dataptr->UseGpio0 = 1; /* cameo */
+	}
+
+	if (ax178dataptr->UseGpio0) {
+
+		if (ax178dataptr->PhyMode == PHY_MODE_MARVELL) {
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+					AXGPIOS_GPO0EN | AXGPIOS_RSE,
+					0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+
+			msleep(25);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+					(AXGPIOS_GPO2 | AXGPIOS_GPO2EN |
+					 AXGPIOS_GPO0EN), 0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+
+			msleep(15);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+					AXGPIOS_GPO2EN | AXGPIOS_GPO0EN,
+					0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+
+			msleep(245);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+					(AXGPIOS_GPO2 | AXGPIOS_GPO2EN |
+					 AXGPIOS_GPO0EN), 0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+
+		} else { /* vitesse */
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+					(AXGPIOS_RSE | AXGPIOS_GPO0EN |
+					 AXGPIOS_GPO0), 0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+
+			msleep(25);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+					(AXGPIOS_GPO0EN | AXGPIOS_GPO0 |
+					 AXGPIOS_GPO2EN | AXGPIOS_GPO2),
+					0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+
+			msleep(25);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+					(AXGPIOS_GPO0EN | AXGPIOS_GPO0 |
+					 AXGPIOS_GPO2EN), 0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+
+			msleep(245);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+						(AXGPIOS_GPO0EN | AXGPIOS_GPO0 |
+						AXGPIOS_GPO2EN | AXGPIOS_GPO2),
+						0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+		}
+	} else {	/* use gpio1 */
+		ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+					(AXGPIOS_GPO1 | AXGPIOS_GPO1EN |
+					AXGPIOS_RSE), 0, 0, NULL);
+		if (ret < 0) {
+			deverr(dev, "write GPIO failed: %d", ret);
+			goto error_out;
+		}
+
+		if (ax178dataptr->BuffaloOld) {
+			msleep(350);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+						AXGPIOS_GPO1EN, 0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+
+			msleep(350);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+						AXGPIOS_GPO1EN | AXGPIOS_GPO1,
+						0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+		} else {
+			msleep(25);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+						(AXGPIOS_GPO1EN | AXGPIOS_GPO1 |
+						AXGPIOS_GPO2EN | AXGPIOS_GPO2),
+						0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+
+			msleep(25);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+						(AXGPIOS_GPO1EN | AXGPIOS_GPO1 |
+						AXGPIOS_GPO2EN), 0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+
+			msleep(245);
+
+			ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_GPIOS,
+						(AXGPIOS_GPO1EN | AXGPIOS_GPO1 |
+						AXGPIOS_GPO2EN | AXGPIOS_GPO2),
+						0, 0, NULL);
+			if (ret < 0) {
+				deverr(dev, "write GPIO failed: %d", ret);
+				goto error_out;
+			}
+		}
+	}
+
+	ret = ax8817x_write_cmd(dev, AX_CMD_SW_PHY_SELECT, 0, 0, 0, NULL);
+	if (ret < 0) {
+		deverr(dev, "Select PHY failed: %d", ret);
+		goto error_out;
+	}
+
+	ret = ax8817x_write_cmd(dev, AX_CMD_SW_RESET, AX_SWRESET_IPPD |
+				AX_SWRESET_PRL, 0, 0, NULL);
+	if (ret < 0) {
+		deverr(dev, "Issue sw reset failed: %d", ret);
+		goto error_out;
+	}
+
+	ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_RX_CTL, 0, 0, 0, NULL);
+	if (ret < 0) {
+		deverr(dev, "Issue rx ctrl failed: %d", ret);
+		goto error_out;
+	}
 
 	/* Get the MAC address */
-	ret = asix_read_cmd(dev, AX_CMD_READ_NODE_ID, 0, 0, ETH_ALEN, buf);
+	memset(buf, 0, ETH_ALEN);
+	ret = ax8817x_read_cmd(dev, AX88772_CMD_READ_NODE_ID,
+			       0, 0, ETH_ALEN, buf);
 	if (ret < 0) {
-		dbg("Failed to read MAC address: %d", ret);
-		return ret;
+		deverr(dev, "read AX_CMD_READ_NODE_ID failed: %d", ret);
+		goto error_out;
 	}
 	memcpy(dev->net->dev_addr, buf, ETH_ALEN);
+	/* End of get MAC address */
 
-	/* Initialize MII structure */
-	dev->mii.dev = dev->net;
-	dev->mii.mdio_read = asix_mdio_read;
-	dev->mii.mdio_write = asix_mdio_write;
-	dev->mii.phy_id_mask = 0x1f;
-	dev->mii.reg_num_mask = 0xff;
-	dev->mii.supports_gmii = 1;
-	dev->mii.phy_id = asix_get_phy_addr(dev);
+	ret = ax88178_phy_init(dev, ax178dataptr);
+	if (ret < 0)
+		goto error_out;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
+	dev->net->do_ioctl = ax8817x_ioctl;
+	dev->net->set_multicast_list = ax88178_set_multicast;
+	dev->net->set_mac_address = ax8817x_set_mac_addr;
+#else
 	dev->net->netdev_ops = &ax88178_netdev_ops;
-	dev->net->ethtool_ops = &ax88178_ethtool_ops;
+#endif
+	dev->net->ethtool_ops = &ax8817x_ethtool_ops;
 
-	/* Blink LEDS so users know driver saw dongle */
-	asix_sw_reset(dev, 0);
-	msleep(150);
+	/* Register suspend and resume functions */
+	data->suspend = ax88772_suspend;
+	data->resume = ax88772_resume;
 
-	asix_sw_reset(dev, AX_SWRESET_PRL | AX_SWRESET_IPPD);
-	msleep(150);
+	if (dev->driver_info->flags & FLAG_FRAMING_AX)
+		dev->rx_urb_size = 16384;
 
-	/* Asix framing packs multiple eth frames into a 2K usb bulk transfer */
-	if (dev->driver_info->flags & FLAG_FRAMING_AX) {
-		/* hard_mtu  is still the default - the device does not support
-		   jumbo eth frames */
-		dev->rx_urb_size = 2048;
+	ret = ax8817x_write_cmd(dev, AX_CMD_WRITE_RX_CTL, (AX_RX_CTL_MFB |
+				AX_RX_CTL_START | AX_RX_CTL_AB), 0, 0, NULL);
+	if (ret < 0) {
+		deverr(dev, "write RX ctrl reg failed: %d", ret);
+		goto error_out;
 	}
 
-	return 0;
+	kfree(buf);
+	printk(version);
+	return ret;
+
+error_out:
+	kfree(ax178dataptr);
+	kfree(buf);
+	return ret;
 }
+
+static int ax_resume(struct usb_interface *intf)
+{
+	struct usbnet *dev = usb_get_intfdata(intf);
+	struct ax8817x_data *data = (struct ax8817x_data *)&dev->data;
+        printk(KERN_DEBUG "function %s line %d ",__FUNCTION__,__LINE__);
+
+	return data->resume(intf);
+}
+
 
 static const struct driver_info ax8817x_info = {
 	.description = "ASIX AX8817x USB 2.0 Ethernet",
