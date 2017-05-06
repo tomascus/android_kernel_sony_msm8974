@@ -360,6 +360,9 @@ struct cpu_vfs_cap_data {
 
 #define CAP_WAKE_ALARM            35
 
+/* Allow preventing system suspends */
+
+#define CAP_BLOCK_SUSPEND    36
 
 #define CAP_LAST_CAP         CAP_WAKE_ALARM
 
