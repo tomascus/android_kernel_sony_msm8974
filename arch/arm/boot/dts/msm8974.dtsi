@@ -909,7 +909,6 @@
 		qcom,sec-auxpcm-gpio-sync = <&msmgpio 80 0>;
 		qcom,sec-auxpcm-gpio-din  = <&msmgpio 81 0>;
 		qcom,sec-auxpcm-gpio-dout = <&msmgpio 82 0>;
-		qcom,5-pole-jack;
 	};
 
 	spmi_bus: qcom,spmi@fc4c0000 {
@@ -2605,14 +2604,6 @@
 		reg = <0xfe053008 0x4>,
 			<0xfe05300c 0x4>;
 		reg-names = "avtimer_lsb_addr", "avtimer_msb_addr";
-	};
-
-	sony,ric_info {
-		compatible = "sony_ric";
-		sony,num-partition = <4>;
-		sony,partition-names = "system", "userdata", "cache", "apps_log";
-		sony,mount_paths = "/system", "/data", "/cache", "/idd";
-		sony,mount-flags = <0x1 0x6 0x6 0xE>;
 	};
 };
 
