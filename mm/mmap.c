@@ -1966,7 +1966,7 @@ __setup("stack_guard_gap=", cmdline_parse_stack_guard_gap);
  * check_stack_guard_page()), which only allows the guard page to be
  * removed under these circumstances.
  */
->>>>>>> b485d147608e... mm: do not grow the stack vma just because of an overrun on preceding vma
+
 #ifdef CONFIG_STACK_GROWSUP
 int expand_stack(struct vm_area_struct *vma, unsigned long address)
 {
