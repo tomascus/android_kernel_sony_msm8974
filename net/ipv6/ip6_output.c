@@ -1385,22 +1385,18 @@ int ip6_append_data(struct sock *sk, int getfrag(void *from, char *to,
 			struct sk_buff *skb_prev;
 alloc_new_skb:
 			skb_prev = skb;
-
 			/* There's no room in the current skb */
 			if (skb_prev)
 				fraggap = skb_prev->len - maxfraglen;
 			else
 				fraggap = 0;
-<<<<<<< HEAD
-=======
+
 			/* update mtu and maxfraglen if necessary */
 			if (skb == NULL || skb_prev == NULL)
 				ip6_append_data_mtu(&mtu, &maxfraglen,
 						    fragheaderlen, skb, rt,
 						    orig_mtu);
 
-			skb_prev = skb;
->>>>>>> 769f81864b8f... ipv6: ip6_append_data_mtu do not handle the mtu of the second fragment properly
 
 			/*
 			 * If remaining data exceeds the mtu,
