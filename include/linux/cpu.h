@@ -165,6 +165,7 @@ static inline void __unregister_cpu_notifier(struct notifier_block *nb)
 int cpu_up(unsigned int cpu);
 void notify_cpu_starting(unsigned int cpu);
 extern void cpu_maps_update_begin(void);
+int cpu_maps_is_updating(void);
 extern void cpu_maps_update_done(void);
 
 #define cpu_notifier_register_begin	cpu_maps_update_begin
@@ -197,6 +198,11 @@ static inline void cpu_maps_update_begin(void)
 {
 }
 
+static inline int cpu_maps_is_updating(void)
+{
+	return 0;
+}
+
 static inline void cpu_maps_update_done(void)
 {
 }
@@ -217,6 +223,8 @@ extern struct bus_type cpu_subsys;
 
 extern void get_online_cpus(void);
 extern void put_online_cpus(void);
+extern void cpu_hotplug_disable(void);
+extern void cpu_hotplug_enable(void);
 #define hotcpu_notifier(fn, pri)	cpu_notifier(fn, pri)
 #define __hotcpu_notifier(fn, pri)	__cpu_notifier(fn, pri)
 #define register_hotcpu_notifier(nb)	register_cpu_notifier(nb)
@@ -242,6 +250,8 @@ static inline void cpu_hotplug_driver_unlock(void)
 
 #define get_online_cpus()	do { } while (0)
 #define put_online_cpus()	do { } while (0)
+#define cpu_hotplug_disable()	do { } while (0)
+#define cpu_hotplug_enable()	do { } while (0)
 #define hotcpu_notifier(fn, pri)	do { (void)(fn); } while (0)
 #define __hotcpu_notifier(fn, pri)	do { (void)(fn); } while (0)
 /* These aren't inline functions due to a GCC bug. */
