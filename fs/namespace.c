@@ -1671,6 +1671,7 @@ static int do_remount(struct path *path, int flags, int mnt_flags,
 	int err;
 	struct super_block *sb = path->mnt->mnt_sb;
 	struct mount *mnt = real_mount(path->mnt);
+	LIST_HEAD(umounts);
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
@@ -1690,6 +1691,9 @@ static int do_remount(struct path *path, int flags, int mnt_flags,
 		err = change_mount_flags(path->mnt, flags);
 	else
 		err = do_remount_sb(sb, flags, data, 0);
+		down_write(&namespace_sem);
+		up_write(&namespace_sem);
+		release_mounts(&umounts);
 	if (!err) {
 		br_write_lock(&vfsmount_lock);
 		mnt_flags |= mnt->mnt.mnt_flags & ~MNT_USER_SETTABLE_MASK;
